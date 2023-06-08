@@ -2,7 +2,7 @@
 
 ## build
 ```sh
-cargo run -p oracle_canister --features "export-api" > .artifact/oracle_canister.did
+cargo run -p oracle_canister --features "export-api" > ./.artifact/oracle_canister.did
 
 cargo build --target wasm32-unknown-unknown --release --package oracle_canister --features "export-api"
 
