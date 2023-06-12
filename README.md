@@ -38,6 +38,12 @@ dfx canister call oracle_canister add_pair '("meme-brc-20")'
 Open link: `http://127.0.0.1:8000/?canisterId=<Oracle_Canister_Id>` such as `http://127.0.0.1:8000/?canisterId=bnz7o-iuaaa-aaaaa-qaaaa-cai` in browser. 
 
 ## work with test evmc
+
+Open link: [oracle canister](https://p6xvw-7iaaa-aaaap-aaana-cai.raw.ic0.app/) in browser. 
+
+The `Aggregator` contract address in EVM canister is `0x4459c8e677022197efc196e1c87b8d9edbaa2a39`.
+
+here is the deploy details:
 ```sh
 dfx build oracle_canister --network ic
 
