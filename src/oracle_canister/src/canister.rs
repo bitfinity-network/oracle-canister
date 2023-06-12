@@ -188,10 +188,11 @@ impl OracleCanister {
         signing_key: Vec<u8>,
     ) -> Result<()> {
         self.check_owner(ic::caller())?;
+        let canister_id = ic::id();
 
         self.state
             .self_account
-            .register_account(transaction, signing_key)
+            .register_account(transaction, signing_key, canister_id)
             .await
     }
 

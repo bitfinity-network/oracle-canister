@@ -1,15 +1,15 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Deserialize, Principal};
 use ic_stable_structures::{StableCell, Storable};
 
 use crate::error::{Error, Result};
-use crate::evm_canister::did::{decode, encode, Transaction, H160, U256};
-use crate::evm_canister::{EvmCanisterImpl, REGISTRATION_FEE};
-use crate::state::{ACCOUNT_MEMORY_ID, NONCE_MEMORY_ID};
+use crate::evm_canister::did::{decode, encode, Transaction, H160};
+use crate::evm_canister::EvmCanisterImpl;
+use crate::state::ACCOUNT_MEMORY_ID;
 
-use super::EvmCanister;
+use super::{EvmCanister, MINT_AMOUNT};
 
 #[derive(Default, Clone)]
 pub struct Account {}
@@ -32,6 +32,7 @@ impl Account {
         &mut self,
         transaction: Transaction,
         signing_key: Vec<u8>,
+        principal: Principal,
     ) -> Result<()> {
         // check if account is alrewady registered or in process
         if ACCOUNT_DATA_CELL.with(|account| {
@@ -45,7 +46,9 @@ impl Account {
                 true
             }
         }) {
-            return Err(Error::Internal("Account already registered".to_string()));
+            return Err(Error::Internal(
+                "Account already registered or under registering".to_string(),
+            ));
         }
 
         let mut evm_impl = EvmCanisterImpl::default();
@@ -53,7 +56,10 @@ impl Account {
         let address = transaction.from.clone();
 
         // check if the address is regestry
-        match evm_impl.is_address_registered(address.clone()).await {
+        match evm_impl
+            .is_address_registered(address.clone(), principal)
+            .await
+        {
             Err(err) => {
                 self.reset();
                 return Err(err);
@@ -71,7 +77,7 @@ impl Account {
 
         // mint EVM native tokens to from address
         if let Err(err) = evm_impl
-            .mint_evm_tokens(address.clone(), REGISTRATION_FEE.into())
+            .mint_evm_tokens(address.clone(), MINT_AMOUNT.into())
             .await
         {
             self.reset();
@@ -79,13 +85,13 @@ impl Account {
         }
 
         // register ic agent
-        if let Err(err) = evm_impl.register_ic_agent(transaction).await {
+        if let Err(err) = evm_impl.register_ic_agent(transaction, principal).await {
             self.reset();
             return Err(err);
         }
 
         // verify the key
-        if let Err(err) = evm_impl.verify_registration(signing_key).await {
+        if let Err(err) = evm_impl.verify_registration(signing_key, principal).await {
             self.reset();
             return Err(err);
         }
@@ -133,10 +139,5 @@ thread_local! {
     static ACCOUNT_DATA_CELL: RefCell<StableCell<AccountState>> = {
         RefCell::new(StableCell::new(ACCOUNT_MEMORY_ID, AccountState::default())
             .expect("stable memory account initialization failed"))
-    };
-
-    static NONCE_CELL: RefCell<StableCell<U256>> = {
-        RefCell::new(StableCell::new(NONCE_MEMORY_ID, U256::one())
-            .expect("stable memory nonce initialization failed"))
     };
 }

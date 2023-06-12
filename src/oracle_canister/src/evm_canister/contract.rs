@@ -79,7 +79,10 @@ impl ContractService {
         })?;
 
         let mut evm_impl = EvmCanisterImpl::default();
-        let tx_hash = match evm_impl.create_contract(U256::zero(), contract_data).await {
+        let tx_hash = match evm_impl
+            .create_contract(U256::zero(), contract_data, 2_000_000)
+            .await
+        {
             Ok(hash) => {
                 CONTRACT_REGISTRATION_TX_HASH.with(|c| {
                     c.borrow_mut()
@@ -243,7 +246,9 @@ impl ContractService {
 
         let mut evm_impl = EvmCanisterImpl::default();
 
-        let tx_hash = evm_impl.transact(U256::zero(), contract, call_data).await?;
+        let tx_hash = evm_impl
+            .transact(U256::zero(), contract, call_data, Some(1_500_000))
+            .await?;
 
         Ok(tx_hash)
     }

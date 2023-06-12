@@ -19,8 +19,8 @@ pub mod contract;
 pub mod did;
 pub mod error;
 
-pub const REGISTRATION_FEE: u64 = 100_000;
-pub const DEFAULT_GAS_LIMIT: u64 = 30_000_000;
+// used to registry agent and deploy contract
+pub const MINT_AMOUNT: u64 = 1_000_000_000;
 
 type EvmResult<T> = Result<T, EvmError>;
 
@@ -28,9 +28,20 @@ type EvmResult<T> = Result<T, EvmError>;
 #[automock]
 #[async_trait(?Send)]
 pub trait EvmCanister: Send {
-    async fn transact(&mut self, value: U256, to: H160, data: Vec<u8>) -> Result<H256, Error>;
+    async fn transact(
+        &mut self,
+        value: U256,
+        to: H160,
+        data: Vec<u8>,
+        gas_limit: Option<u64>,
+    ) -> Result<H256, Error>;
 
-    async fn create_contract(&mut self, value: U256, code: Vec<u8>) -> Result<H256, Error>;
+    async fn create_contract(
+        &mut self,
+        value: U256,
+        code: Vec<u8>,
+        gas_limit: u64,
+    ) -> Result<H256, Error>;
 
     async fn get_balance(&self, address: H160) -> Result<U256, Error>;
 
@@ -43,11 +54,23 @@ pub trait EvmCanister: Send {
 
     async fn mint_evm_tokens(&mut self, to: H160, amount: U256) -> Result<U256, Error>;
 
-    async fn register_ic_agent(&mut self, transaction: Transaction) -> Result<(), Error>;
+    async fn register_ic_agent(
+        &mut self,
+        transaction: Transaction,
+        principal: Principal,
+    ) -> Result<(), Error>;
 
-    async fn verify_registration(&mut self, signing_key: Vec<u8>) -> Result<(), Error>;
+    async fn verify_registration(
+        &mut self,
+        signing_key: Vec<u8>,
+        principal: Principal,
+    ) -> Result<(), Error>;
 
-    async fn is_address_registered(&self, address: H160) -> Result<bool, Error>;
+    async fn is_address_registered(
+        &self,
+        address: H160,
+        principal: Principal,
+    ) -> Result<bool, Error>;
 }
 
 #[derive(Default)]
@@ -58,7 +81,7 @@ impl EvmCanisterImpl {
         State::default().config.get_evmc_principal()
     }
 
-    fn get_nonce(&self) -> U256 {
+    fn get_nonce(&mut self) -> U256 {
         NONCE_CELL.with(|nonce| {
             let value = nonce.borrow().get().clone();
             nonce
@@ -96,11 +119,11 @@ impl EvmCanisterImpl {
         result.map_err(|e| Error::Internal(format!("transaction error: {e}")))
     }
 
-    fn get_tx_params(&self, value: U256) -> Result<TransactionParams, Error> {
+    fn get_tx_params(&mut self, value: U256, gas_limit: u64) -> Result<TransactionParams, Error> {
         Ok(TransactionParams {
             from: account::Account::default().get_account()?,
             value,
-            gas_limit: DEFAULT_GAS_LIMIT,
+            gas_limit,
             gas_price: None,
             nonce: self.get_nonce(),
         })
@@ -109,8 +132,14 @@ impl EvmCanisterImpl {
 
 #[async_trait(?Send)]
 impl EvmCanister for EvmCanisterImpl {
-    async fn transact(&mut self, value: U256, to: H160, data: Vec<u8>) -> Result<H256, Error> {
-        let tx_params = self.get_tx_params(value)?;
+    async fn transact(
+        &mut self,
+        value: U256,
+        to: H160,
+        data: Vec<u8>,
+        gas_limit: Option<u64>,
+    ) -> Result<H256, Error> {
+        let tx_params = self.get_tx_params(value, gas_limit.unwrap_or(21000))?;
 
         let res: Result<(EvmResult<H256>,), _> = ic::call(
             self.get_evm_canister_id(),
@@ -121,8 +150,13 @@ impl EvmCanister for EvmCanisterImpl {
         self.process_call_result(res.map(|val| val.0))
     }
 
-    async fn create_contract(&mut self, value: U256, code: Vec<u8>) -> Result<H256, Error> {
-        let tx_params = self.get_tx_params(value)?;
+    async fn create_contract(
+        &mut self,
+        value: U256,
+        code: Vec<u8>,
+        gas_limit: u64,
+    ) -> Result<H256, Error> {
+        let tx_params = self.get_tx_params(value, gas_limit)?;
 
         let res: Result<(EvmResult<H256>,), _> = ic::call(
             self.get_evm_canister_id(),
@@ -157,14 +191,14 @@ impl EvmCanister for EvmCanisterImpl {
         &self,
         tx_hash: H256,
     ) -> Result<Option<TransactionReceipt>, Error> {
-        let res: Result<(Option<TransactionReceipt>,), _> = ic::call(
+        let res: Result<(EvmResult<Option<TransactionReceipt>>,), _> = ic::call(
             self.get_evm_canister_id(),
             "eth_get_transaction_receipt",
             (tx_hash,),
         )
         .await;
 
-        self.process_call(res.map(|val| val.0))
+        self.process_call_result(res.map(|val| val.0))
     }
 
     async fn mint_evm_tokens(&mut self, to: H160, amount: U256) -> Result<U256, Error> {
@@ -174,33 +208,45 @@ impl EvmCanister for EvmCanisterImpl {
         self.process_call_result(res.map(|val| val.0))
     }
 
-    async fn register_ic_agent(&mut self, transaction: Transaction) -> Result<(), Error> {
+    async fn register_ic_agent(
+        &mut self,
+        transaction: Transaction,
+        principal: Principal,
+    ) -> Result<(), Error> {
         let res: Result<(EvmResult<()>,), _> = ic::call(
             self.get_evm_canister_id(),
             "register_ic_agent",
-            (transaction,),
+            (transaction, principal),
         )
         .await;
 
         self.process_call_result(res.map(|val| val.0))
     }
 
-    async fn verify_registration(&mut self, signing_key: Vec<u8>) -> Result<(), Error> {
+    async fn verify_registration(
+        &mut self,
+        signing_key: Vec<u8>,
+        principal: Principal,
+    ) -> Result<(), Error> {
         let res: Result<(EvmResult<()>,), _> = ic::call(
             self.get_evm_canister_id(),
             "verify_registration",
-            (signing_key,),
+            (signing_key, principal),
         )
         .await;
 
         self.process_call_result(res.map(|val| val.0))
     }
 
-    async fn is_address_registered(&self, address: H160) -> Result<bool, Error> {
+    async fn is_address_registered(
+        &self,
+        address: H160,
+        principal: Principal,
+    ) -> Result<bool, Error> {
         let res: Result<(bool,), _> = ic::call(
             self.get_evm_canister_id(),
             "is_address_registered",
-            (address,),
+            (address, principal),
         )
         .await;
 

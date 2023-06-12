@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use ic_stable_structures::{StableBTreeMap, StableMultimap, StableVec};
+use ic_stable_structures::{StableBTreeMap, StableMultimap};
 
 use crate::error::{Error, Result};
 use crate::state::{PairKey, LATEST_TIME_MEMORY_ID, PAIR_MEMORY_ID, PRICE_MEMORY_ID};
@@ -15,12 +15,12 @@ impl PairPrice {
         PRICE_MAP.with(|price| price.borrow_mut().clear());
         LATEST_TIME_MAP
             .with(|time: &RefCell<StableBTreeMap<PairKey, u64>>| time.borrow_mut().clear());
-        PAIR_VEC.with(|pairs| pairs.borrow_mut().clear().unwrap());
+        PAIR_SET.with(|pairs| pairs.borrow_mut().clear());
     }
 
     /// Returns the all types of price pairs
     pub fn get_pairs(&self) -> Vec<PairKey> {
-        PAIR_VEC.with(|pairs| pairs.borrow().iter().collect())
+        PAIR_SET.with(|pairs| pairs.borrow().iter().map(|(k, _)| k).collect())
     }
 
     /// Returns the latest (timestamp, price) of given pair
@@ -39,7 +39,7 @@ impl PairPrice {
 
     /// Returns whether the given pairkey exists
     pub fn is_exist(&self, pair: &PairKey) -> bool {
-        PAIR_VEC.with(|vec| vec.borrow().iter().any(|i| i == *pair))
+        PAIR_SET.with(|vec| vec.borrow().get(pair).is_some())
     }
 
     /// Add pair to the oracle canister, need to check permission in external function
@@ -48,36 +48,30 @@ impl PairPrice {
         if pair.0.as_bytes().len() > 32 {
             return Err(Error::PairKeyTooLong(pair.0.as_bytes().len() as u64));
         }
-        if PAIR_VEC.with(|pairs| pairs.borrow().iter().any(|i| i == pair)) {
+        if self.is_exist(&pair) {
             return Err(Error::PairExist);
         }
-        PAIR_VEC.with(|pairs| pairs.borrow_mut().push(&pair))?;
+        PAIR_SET.with(|pairs| pairs.borrow_mut().insert(pair, ()));
         Ok(())
     }
 
     /// Delete pair from the oracle canister, need to check permission in external function
     /// If pair doesn't exists, returns Error::PairNotExist.
     pub fn del_pair(&mut self, pair: PairKey) -> Result<()> {
-        let len = PAIR_VEC.with(|pairs| pairs.borrow().len());
-
-        if let Some(idx) = PAIR_VEC.with(|pairs| pairs.borrow().iter().position(|x| x == pair)) {
-            PAIR_VEC.with(|pairs| {
-                let last_key = pairs.borrow().get(len - 1).unwrap();
-                pairs.borrow_mut().set(idx as u64, &last_key).unwrap();
-                pairs.borrow_mut().pop();
-
-                PRICE_MAP.with(|price| price.borrow_mut().remove_partial(&pair));
-                LATEST_TIME_MAP.with(|time| time.borrow_mut().remove(&pair));
-                Ok(())
-            })
-        } else {
-            Err(Error::PairNotExist)
+        if !self.is_exist(&pair) {
+            return Err(Error::PairNotExist);
         }
+
+        PAIR_SET.with(|p| p.borrow_mut().remove(&pair));
+        PRICE_MAP.with(|price| price.borrow_mut().remove_partial(&pair));
+        LATEST_TIME_MAP.with(|time| time.borrow_mut().remove(&pair));
+
+        Ok(())
     }
 
     /// update the new price
     pub fn update_price(&mut self, pair: PairKey, timestamp: u64, price: u64) -> Result<()> {
-        if !PAIR_VEC.with(|vec| vec.borrow().iter().any(|i| i == pair)) {
+        if !self.is_exist(&pair) {
             return Err(Error::PairNotExist);
         }
 
@@ -112,8 +106,8 @@ thread_local! {
         RefCell::new(StableBTreeMap::new(LATEST_TIME_MEMORY_ID))
     };
 
-    static PAIR_VEC: RefCell<StableVec<PairKey>> = {
-        RefCell::new(StableVec::new(PAIR_MEMORY_ID).unwrap())
+    static PAIR_SET: RefCell<StableBTreeMap<PairKey, ()>> = {
+        RefCell::new(StableBTreeMap::new(PAIR_MEMORY_ID))
     };
 }
 
@@ -183,7 +177,7 @@ mod tests {
         let mut pairs = new_pairs();
         fill_pairs(&mut pairs);
 
-        assert_eq!(pairs.get_pairs(), vec![eth_usdt(), btc_usdt(), icp_usdt()]);
+        assert_eq!(pairs.get_pairs(), vec![btc_usdt(), eth_usdt(), icp_usdt()]);
     }
 
     #[test]
@@ -214,7 +208,7 @@ mod tests {
         pairs.del_pair(eth_usdt()).unwrap();
 
         assert!(pairs.get_latest_price(&eth_usdt()).is_none());
-        assert_eq!(pairs.get_pairs(), vec![icp_usdt(), btc_usdt()]);
+        assert_eq!(pairs.get_pairs(), vec![btc_usdt(), icp_usdt()]);
         assert_eq!(pairs.get_prices(&eth_usdt(), 10), vec![]);
         assert_eq!(
             pairs.get_prices(&btc_usdt(), 10),
