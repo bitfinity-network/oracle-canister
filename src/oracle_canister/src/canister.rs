@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use candid::{CandidType, Deserialize};
+use evmc_did::{Transaction, H160, H256, U256};
 use ic_canister::{generate_idl, init, post_upgrade, query, update, Canister, Idl, PreUpdate};
 use ic_exports::ic_cdk;
 use ic_exports::ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
@@ -10,7 +11,6 @@ use ic_exports::Principal;
 
 use crate::error::{Error, Result};
 use crate::evm_canister::contract::ContractService;
-use crate::evm_canister::did::{Transaction, H160, H256, U256};
 use crate::state::http::{http, HttpRequest as ServeRequest, HttpResponse as ServeHttpResponse};
 use crate::state::{PairKey, PairPrice, Settings, State};
 use crate::timer::{sync_coinbase_price, sync_coingecko_price, transform};

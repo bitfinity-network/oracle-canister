@@ -2,22 +2,21 @@ use std::cell::RefCell;
 
 use async_trait::async_trait;
 use candid::Principal;
+use evmc_did::error::{EvmError, TransactionPoolError};
+use evmc_did::{
+    BasicAccount, Transaction, TransactionParams, TransactionReceipt, H160, H256, U256,
+};
 use ic_exports::ic_kit::ic;
 use ic_exports::ic_kit::RejectionCode;
 use ic_stable_structures::StableCell;
 use mockall::automock;
 
 use crate::error::Error;
-use crate::evm_canister::{
-    did::{BasicAccount, Transaction, TransactionParams, TransactionReceipt, H160, H256, U256},
-    error::{EvmError, TransactionPoolError},
-};
+
 use crate::state::{State, NONCE_MEMORY_ID};
 
 pub mod account;
 pub mod contract;
-pub mod did;
-pub mod error;
 
 // used to registry agent and deploy contract
 pub const MINT_AMOUNT: u64 = 1_000_000_000;

@@ -2,10 +2,11 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 
 use candid::{CandidType, Deserialize, Principal};
+use evmc_did::codec::{decode, encode};
+use evmc_did::{Transaction, H160};
 use ic_stable_structures::{StableCell, Storable};
 
 use crate::error::{Error, Result};
-use crate::evm_canister::did::{decode, encode, Transaction, H160};
 use crate::evm_canister::EvmCanisterImpl;
 use crate::state::ACCOUNT_MEMORY_ID;
 

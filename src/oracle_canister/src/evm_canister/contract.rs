@@ -2,11 +2,11 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 
 use ethers_core::abi::{Constructor, Function, Param, ParamType, StateMutability, Token};
+use evmc_did::{TransactionReceipt, H160, H256, U256, U64};
 use ic_stable_structures::{BoundedStorable, StableCell, Storable};
 
 use crate::build_data::get_aggregator_single_smart_contract_code;
 use crate::error::{Error, Result};
-use crate::evm_canister::did::{TransactionReceipt, H160, H256, U256, U64};
 use crate::evm_canister::EvmCanisterImpl;
 use crate::state::{
     CONTRACT_REGISTRATION_STATE_MEMORY_ID, CONTRACT_REGISTRATION_TX_HASH_MEMORY_ID,
