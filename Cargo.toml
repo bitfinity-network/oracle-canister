@@ -1,0 +1,33 @@
+[workspace]
+members = ["src/oracle_canister", "src/solidity-helper"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+
+[workspace.dependencies]
+async-trait = "0.1"
+bytes = "1.4"
+candid = "0.8"
+# Using fixed chrono version. See: https://infinityswap.atlassian.net/browse/EPROD-45
+chrono = "=0.4.19"
+# infinityswap.atlassian.net/browse/EPROD-153 - We are currently depending on a commit, will be removed when new version is released
+ethers-core = { git = "https://github.com/infinity-swap/ethers-rs", default-features = false, package = "ethers-core", branch = "evmc_fork" }
+evmc-did = { git = "https://github.com/infinity-swap/evmc-did", tag = "v0.2.0" }
+hex = "0.4"
+ic-canister = { git = "https://github.com/infinity-swap/canister-sdk", package = "ic-canister", tag = "v0.3.45" }
+ic-exports = { git = "https://github.com/infinity-swap/canister-sdk", package = "ic-exports", tag = "v0.3.45" }
+ic-stable-structures = { git = "https://github.com/infinity-swap/canister-sdk", package = "ic-stable-structures", tag = "v0.3.45" }
+mockall = "0.11.4"
+rand = { version = "0.8", features = ["std_rng", "small_rng"] }
+serde = "1.0"
+serde_bytes = "0.11"
+serde_json = "1.0"
+thiserror = "1.0"
+url = { version = "2.3.1", default-features = false }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1

@@ -12,3 +12,27 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+.vscode
+.fleet
+
+
+# dfx local environment
+.dfx
+
+*.wasm
+*.did
+.DS_Store
+
+# Solidity compiler files
+solidity/cache/
+solidity/out/
+
+# Ignores solidity development broadcast logs
+solidity/broadcast/
+
+# Dotenv file
+.env
+
+# Artifacts folder
+.artifact
+
